@@ -7,7 +7,7 @@ import time
 ti.init(arch=ti.cuda, debug=False)
 
 
-n = 256
+n = 128
 dt = 0.03
 dx = 1/n
 # dx = 1.0
@@ -23,7 +23,7 @@ enable_clipping = True
 
 
 rho = 1
-jacobi_iters = 6
+jacobi_iters = 100
 
 
 colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
@@ -39,14 +39,16 @@ new_pressures = ti.field(dtype=ti.f32, shape=(n, n, n))
 
 divergences = ti.field(dtype=ti.f32, shape=(n, n, n))
 
-pn_max = 10000
+pn_max = 10000000
 pn_current = 0
-rate = 10
+rate = 100000
 particles = ti.Vector.field(3, dtype=ti.f32, shape=pn_max)
+particle_colors = ti.Vector.field(3, dtype=ti.f32, shape=pn_max)
+particle_radius = 0.0001
 
 source_center = ti.Vector([0.5, 0.9, 0.5])
-source_radius = 0.05
-source_velocity = ti.Vector([0.0, -0.05, 0.0])
+source_radius = 0.001
+source_velocity = ti.Vector([0.0, -0.005, 0.0])
 # source_velocity = ti.Vector([0.0, 0.0, -0.05])
 
 # screen center. The simulation area is (0, 0) to (1, 1)
@@ -87,7 +89,29 @@ def init_velocity_field():
 	# 		velocities[i] = ti.Vector([p.y-center.y, center.x-p.x])
 		velocities[i] = ti.Vector([0.0, 0.0, 0.0])
 		# velocities[i] = ti.Vector([0.0, -1.0, 0.0])
-		
+
+# color_tables = [
+# 	ti.Vector([1.0, 0.0, 0.0]),
+# 	ti.Vector([0.0, 1.0, 0.0]),
+# 	ti.Vector([0.0, 0.0, 1.0]),
+# 	ti.Vector([1.0, 1.0, 0.0]),
+# ]
+
+color_tables = [
+	ti.Vector([236, 238, 129], ti.f32)/255, # yellow
+	ti.Vector([141, 223, 203], ti.f32)/255, # green
+	# ti.Vector([130, 160, 216], ti.f32)/255, # blue
+	ti.Vector([255, 155, 80], ti.f32)/255, # orange
+	# ti.Vector([255, 187, 92], ti.f32)/255, # orange
+	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255,
+]
+
+# color_tables = [
+# 	ti.Vector([255, 155, 80], ti.f32)/255, # orange
+# 	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255, # red
+# 	ti.Vector([255, 155, 80], ti.f32)/255, # orange
+# 	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255, # red
+# ]
 @ti.kernel
 def init_particles():
 	for i in ti.grouped(particles):
@@ -96,6 +120,15 @@ def init_particles():
 		b = np.pi * ti.random()
 		particles[i] = ti.Vector([r * ti.cos(a) * ti.sin(b), r * ti.sin(a) * ti.sin(b), r * ti.cos(b)]) + source_center
 		# particles[i] = ti.Vector([ti.random(), ti.random(), ti.random()])
+		if particles[i].x < source_center.x and particles[i].z < source_center.z:
+			particle_colors[i] = color_tables[0]
+		elif particles[i].x > source_center.x and particles[i].z < source_center.z:
+			particle_colors[i] = color_tables[1]
+		elif particles[i].x > source_center.x and particles[i].z > source_center.z:
+			particle_colors[i] = color_tables[2]
+		else:
+			particle_colors[i] = color_tables[3]
+
 		
 @ti.func
 def clamp(p):
@@ -321,7 +354,7 @@ def apply_force_at_point(velocities:ti.template(), colors:ti.template(), pos:ti.
 
 		d2 = (ti.Vector([(i+stagger.x)*dx, (j+stagger.y)*dx, (k+stagger.y)*dx]) - pos).norm_sqr()
 
-		radius = 0.5 * r
+		radius = 0.2 * r
 		velocities[i, j, k] = velocities[i, j, k] + dp * dt * ti.exp(-d2/radius) * 40
 		# if velocities[i, j, k].norm() > 0.00001:
 		# 	print(i, j, k, velocities[i, j, k].norm())
@@ -353,25 +386,25 @@ init_particles()
 # gui = ti.GUI("Fluid 2D", (n, n))
 
 
-# result_dir = "./result"
-# video_manager = ti.tools.VideoManager(output_dir=result_dir, framerate=30, automatic_build=False)
+result_dir = "./result"
+video_manager = ti.tools.VideoManager(output_dir=result_dir, framerate=30, automatic_build=False)
 
 # pre_mouse_pos = None
 # cur_mouse_pos = None
 
 
-window = ti.ui.Window("Fluid 3D", (800, 800), vsync=True)
+window = ti.ui.Window("Fluid 3D", (4000, 3000), vsync=True)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
-scene = window.get_scene()
+scene = ti.ui.Scene()
 camera = ti.ui.Camera()
 
-camera.position(0.5, 0.5, 3)
+camera.position(0.5, 0.5, 1.1)
 camera.lookat(0.5, 0.5, 0.5)
 scene.set_camera(camera)
 
 
-
+frame = 0
 while window.running:
 
 	advect(velocities, velocities, new_velocities, new_new_velocities, dt)
@@ -422,18 +455,26 @@ while window.running:
 	
 	# gui.show()
 
-	camera.track_user_inputs(window, movement_speed=0.1, hold_key=ti.ui.LMB)
+	camera.track_user_inputs(window, movement_speed=0.1, hold_key=ti.ui.RMB)
+	camera.lookat(0.5, 0.5, 0.5)
 	scene.set_camera(camera)
+	# print(camera.get_position, camera.lookat())
 
 	scene.point_light(pos=(0, 5, 2), color=(1, 1, 1))
 	scene.ambient_light((0.5, 0.5, 0.5))
 
-	scene.particles(particles, radius=0.005, color=(1.0, 0.0, 0.0), index_count=pn_current)
+	scene.particles(particles, radius=particle_radius, color=(1.0, 0.0, 0.0), per_vertex_color=particle_colors, index_count=pn_current)
 	
 	canvas.scene(scene)
-
+	if frame > 130:
+		video_manager.write_frame(window.get_image_buffer_as_numpy())
 	window.show()
 
-	# video_manager.write_frame(colors.to_numpy())
+	frame += 1
+	if frame % 10 == 0:
+		print(frame)
+	if frame > 1000:
+		break
 
-# video_manager.make/_video(gif=True, mp4=True)
+
+video_manager.make_video(gif=True, mp4=True)
