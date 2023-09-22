@@ -10,7 +10,6 @@ ti.init(arch=ti.cuda, debug=False)
 n = 128
 dt = 0.03
 dx = 1/n
-# dx = 1.0
 
 # 1, 2, 3
 RK = 3
@@ -21,14 +20,16 @@ enable_BFECC = True
 #
 enable_clipping = True
 
+recording_video = False
+
 
 rho = 1
 jacobi_iters = 100
 
 
-colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
-new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
-new_new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
+# colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
+# new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
+# new_new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
 
 velocities = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
 new_velocities = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
@@ -39,7 +40,7 @@ new_pressures = ti.field(dtype=ti.f32, shape=(n, n, n))
 
 divergences = ti.field(dtype=ti.f32, shape=(n, n, n))
 
-pn_max = 10000000
+pn_max = 1000000
 pn_current = 0
 rate = 100000
 particles = ti.Vector.field(3, dtype=ti.f32, shape=pn_max)
@@ -49,10 +50,7 @@ particle_radius = 0.0001
 source_center = ti.Vector([0.5, 0.9, 0.5])
 source_radius = 0.001
 source_velocity = ti.Vector([0.0, -0.005, 0.0])
-# source_velocity = ti.Vector([0.0, 0.0, -0.05])
 
-# screen center. The simulation area is (0, 0) to (1, 1)
-# center = ti.Vector([0.5, 0.5, 0.0])
 
 # cell center
 stagger = ti.Vector([0.5, 0.5, 0.5])
@@ -62,21 +60,12 @@ stagger = ti.Vector([0.5, 0.5, 0.5])
 def I(i, j, k):
 	return ti.Vector([i, j, k])
 
-
-# @ti.func
-# def vel(p):
-# 	# rotation
-# 	# return ti.Vector([p.y-center.y, center.x-p.x])
-# 	return sample_bilinear(velocities, p)
-
-
-@ti.kernel
-def init_color_field():
-	# random
-	for i in ti.grouped(colors):
-		# colors[i] = ti.Vector([ti.random(), ti.random(), ti.random()])
-		colors[i] = ti.Vector([0.0, 0.0, 0.0])
-		# colors[i] = ti.Vector([1.0, 1.0, 1.0])
+# @ti.kernel
+# def init_color_field():
+# 	# random
+# 	for i in ti.grouped(colors):
+# 		# colors[i] = ti.Vector([ti.random(), ti.random(), ti.random()])
+# 		colors[i] = ti.Vector([0.0, 0.0, 0.0])
 
 
 @ti.kernel
@@ -88,7 +77,6 @@ def init_velocity_field():
 	# 	if d.norm_sqr() < 0.2:
 	# 		velocities[i] = ti.Vector([p.y-center.y, center.x-p.x])
 		velocities[i] = ti.Vector([0.0, 0.0, 0.0])
-		# velocities[i] = ti.Vector([0.0, -1.0, 0.0])
 
 # color_tables = [
 # 	ti.Vector([1.0, 0.0, 0.0]),
@@ -318,56 +306,22 @@ def projection(velocities:ti.template(), pressures:ti.template()):
 		velocities[i, j, k] = velocities[i, j, k] - grad_p / rho * dt
 
 
-# @ti.kernel
-# def apply_force(velocities:ti.template(), colors:ti.template(), pre_mouse_pos:ti.types.ndarray(ndim=1), cur_mouse_pos:ti.types.ndarray(ndim=1)):
-
-# 	p = ti.Vector([cur_mouse_pos[0], cur_mouse_pos[1]])
-# 	pre_p = ti.Vector([pre_mouse_pos[0], pre_mouse_pos[1]])
-
-# 	dp = p - pre_p
-# 	dp = dp / max(1e-5, dp.norm())
-
-# 	color = (ti.Vector([ti.random(), ti.random(), ti.random()]) * 0.7 + ti.Vector([0.1, 0.1, 0.1]) * 0.3)
-
-# 	for i, j in velocities:
-
-
-# 		d2 = (ti.Vector([(i+stagger.x)*dx, (j+stagger.y)*dx]) - p).norm_sqr()
-
-# 		radius = 0.0001
-# 		velocities[i, j] = velocities[i, j] + dp * dt * ti.exp(-d2/radius) * 40
-
-
-# 		if dp.norm() > 0.5:
-# 			colors[i, j] = colors[i, j] + ti.exp(-d2 * (4 / (1 / 15)**2)) * color
-
 @ti.kernel
-def apply_force_at_point(velocities:ti.template(), colors:ti.template(), pos:ti.template(), r: ti.template(), force:ti.template()):
+def apply_force_at_point(velocities:ti.template(), pos:ti.template(), r: ti.template(), force:ti.template()):
 
 	dp = force + (ti.Vector([ti.random(), ti.random(), ti.random()]) - 0.5) * 0.001
-	# dp = dp / max(1e-5, dp.norm())
-
-	color = (ti.Vector([ti.random(), ti.random(), ti.random()]) * 0.7 + ti.Vector([0.1, 0.1, 0.1]) * 0.3)
 
 	for i, j, k in velocities:
-
-
 		d2 = (ti.Vector([(i+stagger.x)*dx, (j+stagger.y)*dx, (k+stagger.y)*dx]) - pos).norm_sqr()
-
 		radius = 0.2 * r
 		velocities[i, j, k] = velocities[i, j, k] + dp * dt * ti.exp(-d2/radius) * 40
-		# if velocities[i, j, k].norm() > 0.00001:
-		# 	print(i, j, k, velocities[i, j, k].norm())
 
 
-		# if dp.norm() > 0.5:
-		# 	colors[i, j, k] = colors[i, j, k] + ti.exp(-d2 * (4 / (1 / 15)**2)) * color
 
-
-@ti.kernel
-def decay_color(colors:ti.template()):
-	for i in ti.grouped(colors):
-		colors[i] = colors[i] * 0.99
+# @ti.kernel
+# def decay_color(colors:ti.template()):
+# 	for i in ti.grouped(colors):
+# 		colors[i] = colors[i] * 0.99
 
 
 @ti.kernel
@@ -378,22 +332,16 @@ def update_particles(pn_current:ti.i32):
 
 
 
-init_color_field()
+# init_color_field()
 init_velocity_field()
 init_particles()
-
-
-# gui = ti.GUI("Fluid 2D", (n, n))
 
 
 result_dir = "./result"
 video_manager = ti.tools.VideoManager(output_dir=result_dir, framerate=30, automatic_build=False)
 
-# pre_mouse_pos = None
-# cur_mouse_pos = None
 
-
-window = ti.ui.Window("Fluid 3D", (4000, 3000), vsync=True)
+window = ti.ui.Window("Stable Fluid 3D", (800, 800), vsync=False)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
@@ -408,30 +356,15 @@ frame = 0
 while window.running:
 
 	advect(velocities, velocities, new_velocities, new_new_velocities, dt)
-	advect(velocities, colors, new_colors, new_new_colors, dt)
 	velocities, new_velocities = new_velocities, velocities
-	colors, new_colors = new_colors, colors
-
-
-	# gui.get_event(ti.GUI.PRESS)
-
-	# if gui.is_pressed(ti.GUI.LMB):
-	# 	pre_mouse_pos = cur_mouse_pos
-	# 	cur_mouse_pos = np.array(gui.get_cursor_pos(), dtype=np.float32)
-	# 	if pre_mouse_pos is None:
-	# 		pre_mouse_pos = cur_mouse_pos
-	# 	apply_force(velocities, colors, pre_mouse_pos, cur_mouse_pos)
-	# else:
-	# 	pre_mouse_pos = cur_mouse_pos = None
 	
-	apply_force_at_point(velocities, colors, source_center, source_radius, source_velocity)
-
-
-	decay_color(colors)
-
+	# advect(velocities, colors, new_colors, new_new_colors, dt)
+	# colors, new_colors = new_colors, colors
+	
+	apply_force_at_point(velocities, source_center, source_radius, source_velocity)
+	# decay_color(colors)
 	solve_divergence(velocities, divergences)
-
-
+	
 	for i in range(jacobi_iters):
 		pressure_jacobi(pressures, new_pressures)
 		pressures, new_pressures = new_pressures, pressures
@@ -442,39 +375,26 @@ while window.running:
 		pn_current += rate
 	update_particles(pn_current)
 
-
-
-	# gui.set_image(colors)
-	# gui.circles(particles.to_numpy()[:pn_current], radius=1.2, color=0x3399FF)
-
-	# gui.text(content=f'RK {RK}', pos=(0, 0.98), color=0xFFFFFF)
-	# if enable_BFECC: 
-	# 	gui.text(content=f'BFECC', pos=(0, 0.94), color=0xFFFFFF)
-	# 	if enable_clipping: 
-	# 		gui.text(content=f'Clipped', pos=(0, 0.90), color=0xFFFFFF)
-	
-	# gui.show()
-
+	# rendering
 	camera.track_user_inputs(window, movement_speed=0.1, hold_key=ti.ui.RMB)
-	camera.lookat(0.5, 0.5, 0.5)
+	# camera.lookat(0.5, 0.5, 0.5)
 	scene.set_camera(camera)
-	# print(camera.get_position, camera.lookat())
 
 	scene.point_light(pos=(0, 5, 2), color=(1, 1, 1))
 	scene.ambient_light((0.5, 0.5, 0.5))
-
 	scene.particles(particles, radius=particle_radius, color=(1.0, 0.0, 0.0), per_vertex_color=particle_colors, index_count=pn_current)
-	
 	canvas.scene(scene)
-	if frame > 130:
-		video_manager.write_frame(window.get_image_buffer_as_numpy())
+
+	if recording_video:
+		if frame > 130:
+			video_manager.write_frame(window.get_image_buffer_as_numpy())
 	window.show()
 
 	frame += 1
-	if frame % 10 == 0:
-		print(frame)
+	# if frame % 10 == 0:
+	# 	print(frame)
 	if frame > 1000:
 		break
 
-
-video_manager.make_video(gif=True, mp4=True)
+if recording_video:
+	video_manager.make_video(gif=True, mp4=True)
