@@ -32,7 +32,7 @@ new_pressures = ti.field(dtype=ti.f32, shape=(n, n, n))
 
 divergences = ti.field(dtype=ti.f32, shape=(n, n, n))
 
-pn_max = 1000000
+pn_max = 10000000
 pn_current = 0
 rate = 100000
 particles = ti.Vector.field(3, dtype=ti.f32, shape=pn_max)
