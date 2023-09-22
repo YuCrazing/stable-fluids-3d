@@ -15,7 +15,7 @@ python3 stable_fluids_3d.py
 ```
 
 Default settings:
-* `grid resolution`: 128^3.
+* `grid resolution`: 128\*128\*128.
 * `particle number`: 10 million.
 * `jacobi iteration num`: 100.
 
