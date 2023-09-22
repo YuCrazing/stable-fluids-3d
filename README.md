@@ -1,5 +1,5 @@
 # stable-fluids-3d
-This is a single-file implementation of 3D stable fluids.
+A single-file implementation of 3D stable fluids.
 
 ![000386](https://github.com/YuCrazing/stable-fluids-3d/assets/8120108/d046e914-782a-41c7-9d77-391daf45b68c)
 
