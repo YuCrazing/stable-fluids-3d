@@ -14,10 +14,7 @@ dx = 1/n
 # 1, 2, 3
 RK = 3
 
-#
 enable_BFECC = True
-
-#
 enable_clipping = True
 
 recording_video = False
@@ -25,11 +22,6 @@ recording_video = False
 
 rho = 1
 jacobi_iters = 100
-
-
-# colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
-# new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
-# new_new_colors = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
 
 velocities = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
 new_velocities = ti.Vector.field(3, dtype=ti.f32, shape=(n, n, n))
@@ -60,38 +52,18 @@ stagger = ti.Vector([0.5, 0.5, 0.5])
 def I(i, j, k):
 	return ti.Vector([i, j, k])
 
-# @ti.kernel
-# def init_color_field():
-# 	# random
-# 	for i in ti.grouped(colors):
-# 		# colors[i] = ti.Vector([ti.random(), ti.random(), ti.random()])
-# 		colors[i] = ti.Vector([0.0, 0.0, 0.0])
-
 
 @ti.kernel
 def init_velocity_field():
-	# rotation
 	for i in ti.grouped(velocities):
-	# 	p = (i + stagger) * dx
-	# 	d = p - center
-	# 	if d.norm_sqr() < 0.2:
-	# 		velocities[i] = ti.Vector([p.y-center.y, center.x-p.x])
 		velocities[i] = ti.Vector([0.0, 0.0, 0.0])
 
-# color_tables = [
-# 	ti.Vector([1.0, 0.0, 0.0]),
-# 	ti.Vector([0.0, 1.0, 0.0]),
-# 	ti.Vector([0.0, 0.0, 1.0]),
-# 	ti.Vector([1.0, 1.0, 0.0]),
-# ]
 
 color_tables = [
 	ti.Vector([236, 238, 129], ti.f32)/255, # yellow
 	ti.Vector([141, 223, 203], ti.f32)/255, # green
-	# ti.Vector([130, 160, 216], ti.f32)/255, # blue
 	ti.Vector([255, 155, 80], ti.f32)/255, # orange
-	# ti.Vector([255, 187, 92], ti.f32)/255, # orange
-	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255,
+	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255, # red
 ]
 
 # color_tables = [
@@ -100,6 +72,7 @@ color_tables = [
 # 	ti.Vector([255, 155, 80], ti.f32)/255, # orange
 # 	ti.Vector([255.0, 0.0, 0.0], ti.f32)/255, # red
 # ]
+
 @ti.kernel
 def init_particles():
 	for i in ti.grouped(particles):
@@ -107,7 +80,6 @@ def init_particles():
 		a = np.pi * ti.random() * 2
 		b = np.pi * ti.random()
 		particles[i] = ti.Vector([r * ti.cos(a) * ti.sin(b), r * ti.sin(a) * ti.sin(b), r * ti.cos(b)]) + source_center
-		# particles[i] = ti.Vector([ti.random(), ti.random(), ti.random()])
 		if particles[i].x < source_center.x and particles[i].z < source_center.z:
 			particle_colors[i] = color_tables[0]
 		elif particles[i].x > source_center.x and particles[i].z < source_center.z:
@@ -317,13 +289,6 @@ def apply_force_at_point(velocities:ti.template(), pos:ti.template(), r: ti.temp
 		velocities[i, j, k] = velocities[i, j, k] + dp * dt * ti.exp(-d2/radius) * 40
 
 
-
-# @ti.kernel
-# def decay_color(colors:ti.template()):
-# 	for i in ti.grouped(colors):
-# 		colors[i] = colors[i] * 0.99
-
-
 @ti.kernel
 def update_particles(pn_current:ti.i32):
 	for i in range(pn_current):
@@ -332,25 +297,26 @@ def update_particles(pn_current:ti.i32):
 
 
 
-# init_color_field()
-init_velocity_field()
-init_particles()
-
-
 result_dir = "./result"
 video_manager = ti.tools.VideoManager(output_dir=result_dir, framerate=30, automatic_build=False)
 
 
-window = ti.ui.Window("Stable Fluid 3D", (800, 800), vsync=False)
+window = ti.ui.Window("Stable Fluids 3D", (800, 800), vsync=False)
 canvas = window.get_canvas()
 canvas.set_background_color((1, 1, 1))
 scene = ti.ui.Scene()
 camera = ti.ui.Camera()
 
-camera.position(0.5, 0.5, 1.1)
+if recording_video:
+	camera.position(0.5, 0.5, 1.1)
+else:
+	camera.position(0.5, 0.5, 1.5)
 camera.lookat(0.5, 0.5, 0.5)
 scene.set_camera(camera)
 
+
+init_velocity_field()
+init_particles()
 
 frame = 0
 while window.running:
@@ -358,13 +324,9 @@ while window.running:
 	advect(velocities, velocities, new_velocities, new_new_velocities, dt)
 	velocities, new_velocities = new_velocities, velocities
 	
-	# advect(velocities, colors, new_colors, new_new_colors, dt)
-	# colors, new_colors = new_colors, colors
-	
 	apply_force_at_point(velocities, source_center, source_radius, source_velocity)
-	# decay_color(colors)
 	solve_divergence(velocities, divergences)
-	
+
 	for i in range(jacobi_iters):
 		pressure_jacobi(pressures, new_pressures)
 		pressures, new_pressures = new_pressures, pressures
@@ -391,10 +353,11 @@ while window.running:
 	window.show()
 
 	frame += 1
-	# if frame % 10 == 0:
-	# 	print(frame)
-	if frame > 1000:
-		break
+	if recording_video:
+		if frame % 10 == 0:
+			print(frame)
+		if frame > 1000:
+			break
 
 if recording_video:
 	video_manager.make_video(gif=True, mp4=True)
