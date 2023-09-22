@@ -34,5 +34,4 @@ Compressed version:
 ![video_2_x4_600](https://github.com/YuCrazing/stable-fluids-3d/assets/8120108/5757eb55-3de8-49e3-aa19-16a4d522e9e8)
 
 
-High-quality version: [YouTube](www.youtube.com).
-
+High-quality version: [YouTube](https://www.youtube.com/watch?v=yHe8xkoV5y4).
