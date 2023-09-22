@@ -3,8 +3,12 @@ This is a single-file implementation of 3D stable fluids.
 
 ![000386](https://github.com/YuCrazing/stable-fluids-3d/assets/8120108/843c3567-b986-49c4-8816-221e083f2c7e)
 
-High-quality video: [YouTube](www.youtube.com).
+## Video
+Compressed version:
 
+![video_2_x4_600](https://github.com/YuCrazing/stable-fluids-3d/assets/8120108/ed3656ca-ccfd-435f-b3f5-16f784361fe9)
+
+High-quality version: [YouTube](www.youtube.com).
 
 ## Running
 Prerequisites:
